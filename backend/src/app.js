@@ -1,0 +1,84 @@
+import http from "node:http";
+import QRCode from "qrcode";
+import { config as defaults } from "./config.js";
+import { addHours, cleanText, hash, id, now, publicLead, readJson, safeEqual, send, token } from "./lib.js";
+import { validateLead } from "./validation.js";
+import { completeness, discoverySchema, routeRequirement, TECHNICAL_LEVELS } from "./discovery.js";
+import { buildRecommendation } from "./recommendation.js";
+import { EmailService } from "./email.js";
+import { AiSuggestionService } from "./ai.js";
+import { resolveWorkloadBaseline } from "./workload-baseline.js";
+
+const statuses = new Set(["new", "in_review", "needs_info", "validated", "contacted", "won", "lost"]);
+const audit = (data, action, entity, entityId, actor = "customer", metadata = {}) => data.auditEvents.push({ audit_id: id("audit"), actor, action, entity, entity_id: entityId, metadata, timestamp: now() });
+
+export function createApp({ store, config = defaults, email = new EmailService(config.emailMode), ai = new AiSuggestionService(config) }) {
+  const rate = new Map();
+  const limited = (req) => { const key = req.socket.remoteAddress || "unknown", minute = Math.floor(Date.now() / 60000), item = rate.get(key); const count = item?.minute === minute ? item.count + 1 : 1; rate.set(key, { minute, count }); return count > config.rateLimitPerMinute; };
+  const admin = (req) => safeEqual(req.headers["x-admin-api-key"], config.adminApiKey);
+  const match = (path, pattern) => { const a = path.split("/").filter(Boolean), b = pattern.split("/").filter(Boolean); if (a.length !== b.length) return null; const params = {}; for (let i=0;i<a.length;i++) { if (b[i][0] === ":") params[b[i].slice(1)] = decodeURIComponent(a[i]); else if (a[i] !== b[i]) return null; } return params; };
+  const getSession = (sessionId) => store.find("sessions", (x) => x.session_id === sessionId);
+  const assertResume = (req, session) => { const value = String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""); return session && !session.revoked_at && new Date(session.expires_at) > new Date() && safeEqual(hash(value), session.resume_token_hash); };
+  const handler = async (req, res) => {
+    try {
+      if (limited(req)) return send(res, 429, { error: "RATE_LIMITED", message: "Terlalu banyak permintaan" }, { "retry-after": "60" });
+      const url = new URL(req.url, config.publicBaseUrl), path = url.pathname, method = req.method;
+      if (method === "OPTIONS") { res.writeHead(204, { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type,authorization,x-admin-api-key,idempotency-key", "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS" }); return res.end(); }
+      res.setHeader("access-control-allow-origin", "*"); res.setHeader("x-content-type-options", "nosniff"); res.setHeader("referrer-policy", "no-referrer");
+      if (method === "GET" && path === "/") return send(res, 200, {
+        name: "Rainer AI Assistant API",
+        version: config.appVersion,
+        status: "running",
+        message: "Backend aktif. Gunakan endpoint /health untuk status layanan dan /v1 untuk API aplikasi.",
+        endpoints: {
+          health: "/health",
+          create_lead: "POST /v1/leads",
+          result: "GET /v1/results/:token",
+          admin_leads: "GET /v1/admin/leads"
+        }
+      });
+      if (method === "GET" && path === "/health") return send(res, ai.isConfigured?.() === false && config.aiRequired ? 503 : 200, { status: ai.isConfigured?.() === false && config.aiRequired ? "degraded" : "ok", version: config.appVersion, ai: { required: config.aiRequired, configured: ai.isConfigured?.() ?? true }, time: now() });
+      if (method === "POST" && path === "/v1/leads") {
+        const body = await readJson(req), checked = validateLead(body, config.freeEmailPolicy);
+        if (checked.errors.length) return send(res, 422, { error: "VALIDATION_ERROR", details: checked.errors });
+        const resume = token();
+        const result = await store.mutate((data) => {
+          const existing = data.leads.find((x) => x.company_email === checked.value.company_email && x.company.toLowerCase() === checked.value.company.toLowerCase());
+          const lead = existing || { lead_id: id("lead"), ...checked.value, locale: body.locale || "id-ID", consent_version: cleanText(body.consent_version || "2026-08-16", 40), service_consent_at: now(), marketing_consent: body.marketing_consent === true, created_at: now() };
+          if (!existing) data.leads.push(lead);
+          const session = { session_id: id("session"), lead_id: lead.lead_id, status: "identity_completed", route: null, progress: 15, started_at: now(), last_seen_at: now(), resume_token_hash: hash(resume), expires_at: addHours(config.resumeTtlHours) };
+          data.sessions.push(session); data.requirements.push({ session_id: session.session_id, technical_level: null, technical_mode_enabled: false, goal: null, answers: {}, completeness: 0, unknown_fields: [], customer_confirmed_at: null });
+          audit(data, "lead.submitted", "lead", lead.lead_id, "customer", { session_id: session.session_id, deduplicated: Boolean(existing) });
+          return { lead, session };
+        });
+        return send(res, 201, { lead: publicLead(result.lead), session: result.session, resume_token: resume, warnings: checked.warnings });
+      }
+      let p = match(path, "/v1/sessions/:id");
+      if (p && method === "GET") { const session = getSession(p.id); if (!assertResume(req, session)) return send(res, 401, { error: "INVALID_RESUME_TOKEN" }); const requirement = store.find("requirements", (x) => x.session_id === p.id); return send(res, 200, { session, requirement, discovery: session.route ? discoverySchema(session.route, requirement.technical_level) : null }); }
+      p = match(path, "/v1/sessions/:id/profile");
+      if (p && method === "PATCH") { const session = getSession(p.id); if (!assertResume(req, session)) return send(res, 401, { error: "INVALID_RESUME_TOKEN" }); const body = await readJson(req); if (!TECHNICAL_LEVELS.has(body.technical_level)) return send(res, 422, { error: "VALIDATION_ERROR", details: [{ field: "technical_level", message: "Gunakan business, intermediate, atau expert" }] }); const value = await store.mutate((data) => { const r=data.requirements.find((x)=>x.session_id===p.id); r.technical_level=body.technical_level; r.technical_mode_enabled=body.technical_mode_enabled === true || body.technical_level === "expert"; session.status="profile_completed"; session.progress=Math.max(session.progress,25); session.last_seen_at=now(); audit(data,"technical_level.updated","requirement",p.id); return r; }); return send(res,200,{ requirement:value }); }
+      p = match(path, "/v1/sessions/:id/answers");
+      if (p && method === "PATCH") { const session=getSession(p.id); if(!assertResume(req,session)) return send(res,401,{error:"INVALID_RESUME_TOKEN"}); const body=await readJson(req); const value=await store.mutate((data)=>{const r=data.requirements.find((x)=>x.session_id===p.id); if(!r.technical_level) throw Object.assign(new Error("Pilih level teknis terlebih dahulu"),{status:409}); r.goal=body.goal ?? r.goal; r.answers={...r.answers,...(body.answers||{})}; const routed=routeRequirement(r.goal,r.answers); session.route=routed.route; const c=completeness(session.route,r.answers); r.completeness=c.score; r.unknown_fields=c.unknown; session.progress=Math.max(session.progress,Math.min(80,30+Math.round(c.score*.5))); session.status="discovery_in_progress"; session.last_seen_at=now(); audit(data,"answers.saved","requirement",p.id,"customer",{route:session.route,rule_id:routed.rule_id,completeness:c.score}); return {r,c,routed};}); return send(res,200,{requirement:value.r,completeness:value.c,route:value.routed}); }
+      p = match(path, "/v1/sessions/:id/confirm");
+      if (p && method === "POST") { const session=getSession(p.id); if(!assertResume(req,session)) return send(res,401,{error:"INVALID_RESUME_TOKEN"}); const r=store.find("requirements",x=>x.session_id===p.id), c=completeness(session.route,r.answers); if(!c.minimum_met) return send(res,422,{error:"INCOMPLETE_DISCOVERY",completeness:c}); await store.mutate(data=>{r.customer_confirmed_at=now();session.status="ready_to_generate";session.progress=85;audit(data,"answers.confirmed","requirement",p.id);}); return send(res,200,{status:"ready_to_generate",completeness:c}); }
+      p = match(path, "/v1/sessions/:id/recommendations");
+      if (p && method === "POST") { const session=getSession(p.id); if(!assertResume(req,session)) return send(res,401,{error:"INVALID_RESUME_TOKEN"}); const idem=cleanText(req.headers["idempotency-key"],100); const old=idem&&store.find("recommendations",x=>x.session_id===p.id&&x.idempotency_key===idem); if(old) return send(res,200,{result_id:old.result_id,result_url:old.result_url,idempotent:true}); const requirement=store.find("requirements",x=>x.session_id===p.id); if(!requirement.customer_confirmed_at) return send(res,409,{error:"ANSWERS_NOT_CONFIRMED"}); const c=completeness(session.route,requirement.answers); const baseline=resolveWorkloadBaseline(session.route,requirement.answers); const aiResult=await ai.suggest({route:session.route,technical_level:requirement.technical_level,answers:requirement.answers,completeness:c,workload_baseline:baseline,knowledge_base_version:config.versions.kb,guardrails:{minimum_headroom_percent:20,unknown_values_use_baseline:true,no_commercial_claims:true,no_final_compatibility_claims:true}}); const built=buildRecommendation({route:session.route,answers:requirement.answers,completeness:c,technical_level:requirement.technical_level,versions:config.versions,aiResult,baseline}); if(!built.lint.passed) return send(res,422,{error:"GUARDRAIL_BLOCKED",violations:built.lint.violations}); const shareToken=token(), resultId=id("result"), resultUrl=`${config.publicBaseUrl}/v1/results/${shareToken}`; const qrSvg=await QRCode.toString(resultUrl,{type:"svg",errorCorrectionLevel:"M",margin:1}); const record=await store.mutate(data=>{const rec={result_id:resultId,session_id:p.id,lead_id:session.lead_id,idempotency_key:idem||null,result_url:resultUrl,...built.recommendation,generated_at:now()}; data.recommendations.push(rec);data.shares.push({result_id:resultId,canonical_url_token_hash:hash(shareToken),qr_svg:qrSvg,expires_at:addHours(config.resultTtlHours),revoked_at:null,access_policy:"opaque_token"});session.status="generated";session.progress=100;audit(data,"recommendation.generated","recommendation",resultId,"system",{confidence:rec.confidence,model:rec.provenance.model,headroom_percent:rec.sizing.headroom_percent,workload_profile:baseline.profile_id});return rec;}); return send(res,201,{result_id:record.result_id,result_url:resultUrl,confidence:record.confidence,sizing:record.sizing,alternatives:record.alternatives,workload_profile:record.workload_profile,scalability:record.scalability,validation_required:record.validation_required}); }
+      p = match(path, "/v1/results/:token");
+      if (p && method === "GET") { const share=store.find("shares",x=>safeEqual(x.canonical_url_token_hash,hash(p.token))); if(!share) return send(res,404,{error:"RESULT_NOT_FOUND"}); if(share.revoked_at) return send(res,410,{error:"RESULT_REVOKED"}); if(new Date(share.expires_at)<=new Date()) return send(res,410,{error:"RESULT_EXPIRED",can_request_new_link:true}); const rec=store.find("recommendations",x=>x.result_id===share.result_id), lead=store.find("leads",x=>x.lead_id===rec.lead_id); return send(res,200,{result:{...rec,lead:{name:lead.name,company:lead.company}},share:{expires_at:share.expires_at}}); }
+      p = match(path, "/v1/results/:token/qr.svg");
+      if(p&&method==="GET"){const share=store.find("shares",x=>safeEqual(x.canonical_url_token_hash,hash(p.token)));if(!share||share.revoked_at||new Date(share.expires_at)<=new Date())return send(res,404,{error:"RESULT_NOT_AVAILABLE"});res.writeHead(200,{"content-type":"image/svg+xml; charset=utf-8","cache-control":"private, max-age=300","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'"});return res.end(share.qr_svg);}
+      p = match(path, "/v1/results/:token/email");
+      if(p&&method==="POST"){const share=store.find("shares",x=>safeEqual(x.canonical_url_token_hash,hash(p.token)));if(!share||share.revoked_at)return send(res,404,{error:"RESULT_NOT_AVAILABLE"});const rec=store.find("recommendations",x=>x.result_id===share.result_id), lead=store.find("leads",x=>x.lead_id===rec.lead_id);const recent=store.list("deliveries").filter(x=>x.result_id===rec.result_id&&Date.now()-new Date(x.sent_at).getTime()<60000);if(recent.length>=2)return send(res,429,{error:"EMAIL_RATE_LIMITED"},{"retry-after":"60"});const delivery=await email.sendResult({recipient:lead.company_email,name:lead.name,url:rec.result_url,summary:rec.config_name});await store.mutate(data=>{data.deliveries.push({delivery_id:id("delivery"),result_id:rec.result_id,channel:"email",recipient_hash:hash(lead.company_email),template_version:"result-v1",...delivery,sent_at:now()});audit(data,"email.sent","recommendation",rec.result_id,"customer",{status:delivery.status});});return send(res,202,{status:delivery.status});}
+      if(path==="/v1/admin/leads"&&method==="GET"){if(!admin(req))return send(res,401,{error:"ADMIN_UNAUTHORIZED"});const items=store.list("sessions").map(s=>{const l=store.find("leads",x=>x.lead_id===s.lead_id),r=store.find("requirements",x=>x.session_id===s.session_id),rec=store.find("recommendations",x=>x.session_id===s.session_id),review=rec&&store.find("reviews",x=>x.result_id===rec.result_id);return{session_id:s.session_id,result_id:rec?.result_id??null,lead:publicLead(l),route:s.route,completeness:r.completeness,confidence:rec?.confidence??null,delivery_status:rec?store.list("deliveries").filter(x=>x.result_id===rec.result_id).at(-1)?.status??"not_sent":null,review_status:review?.status??"new"};});return send(res,200,{items});}
+      p=match(path,"/v1/admin/results/:id");
+      if(p&&method==="GET"){if(!admin(req))return send(res,401,{error:"ADMIN_UNAUTHORIZED"});const rec=store.find("recommendations",x=>x.result_id===p.id);if(!rec)return send(res,404,{error:"RESULT_NOT_FOUND"});const session=getSession(rec.session_id),requirement=store.find("requirements",x=>x.session_id===rec.session_id),lead=store.find("leads",x=>x.lead_id===rec.lead_id);return send(res,200,{lead,session,requirement,recommendation:rec,deliveries:store.list("deliveries").filter(x=>x.result_id===p.id),reviews:store.list("reviews").filter(x=>x.result_id===p.id)});}
+      p=match(path,"/v1/admin/results/:id/review");
+      if(p&&method==="PATCH"){if(!admin(req))return send(res,401,{error:"ADMIN_UNAUTHORIZED"});const body=await readJson(req);if(!statuses.has(body.status))return send(res,422,{error:"VALIDATION_ERROR",details:[{field:"status",message:"Status review tidak valid"}]});const rec=store.find("recommendations",x=>x.result_id===p.id);if(!rec)return send(res,404,{error:"RESULT_NOT_FOUND"});const review=await store.mutate(data=>{let r=data.reviews.find(x=>x.result_id===p.id);if(!r){r={review_id:id("review"),result_id:p.id};data.reviews.push(r);}Object.assign(r,{status:body.status,notes:cleanText(body.notes,2000),reviewer_id:cleanText(body.reviewer_id||"admin",120),reviewed_at:now()});audit(data,"review.updated","recommendation",p.id,r.reviewer_id,{status:r.status});return r;});return send(res,200,{review});}
+      p=match(path,"/v1/admin/results/:id/revoke");
+      if(p&&method==="POST"){if(!admin(req))return send(res,401,{error:"ADMIN_UNAUTHORIZED"});const share=store.find("shares",x=>x.result_id===p.id);if(!share)return send(res,404,{error:"RESULT_NOT_FOUND"});await store.mutate(data=>{share.revoked_at=now();audit(data,"share.revoked","recommendation",p.id,"admin");});return send(res,200,{revoked_at:share.revoked_at});}
+      if(path==="/v1/admin/audit-events"&&method==="GET"){if(!admin(req))return send(res,401,{error:"ADMIN_UNAUTHORIZED"});return send(res,200,{items:store.list("auditEvents").slice(-200).reverse()});}
+      return send(res,404,{error:"NOT_FOUND"});
+    } catch(error) { console.error(error); return send(res,error.status||500,{error:error.status?"REQUEST_ERROR":"INTERNAL_ERROR",message:error.status?error.message:"Terjadi kesalahan internal"}); }
+  };
+  return http.createServer(handler);
+}
