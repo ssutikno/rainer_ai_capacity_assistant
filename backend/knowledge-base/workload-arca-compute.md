@@ -1,4 +1,4 @@
-# ARCA Compute Workload Baseline v1.3.0
+# ARCA Compute Workload Baseline v2.0.0
 
 Baseline dipakai saat metrik aktual customer belum tersedia. Nilai terukur selalu mengalahkan baseline.
 

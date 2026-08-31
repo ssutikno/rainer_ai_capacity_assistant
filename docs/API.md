@@ -1,6 +1,12 @@
 # API Rainer AI Capacity Assistant
 
-Kontrak ini berlaku untuk versi 1.3.0. Base URL lokal: `http://localhost:4000`.
+Kontrak ini berlaku untuk versi 2.0.0. Base URL lokal: `http://localhost:4000`.
+
+`PATCH /v1/sessions/:id/answers` menerima `goals: string[]` dan `product_quantities` untuk solusi multi-produk. Contoh: `{"goals":["compute","storage","ai"],"product_quantities":{"ARCA":3,"STOR":2,"AIX":1}}`. Quantity dibatasi 1–16 per keluarga. `goal` tunggal tetap didukung. Respons recommendation version 3 menambahkan `routes`, `products`, `interconnections`, `network_architecture`, dan `solution_validation_required`; projection field lama tetap tersedia untuk kompatibilitas.
+
+Setiap interconnection berisi endpoint, purpose, traffic class, protocol, estimated bandwidth, recommended link, quantity, redundancy, dan validation requirements. Network architecture berisi topology, segments, switching requirements, resilience strategy, capacity rationale, dan expansion triggers.
+
+Frontend membentuk diagram dan file `.excalidraw` dari kontrak tersebut. Karena diagram bersifat derivatif, API tidak menyimpan binary image terpisah dan tidak mengirim identitas lead ke canvas.
 
 ## Customer
 

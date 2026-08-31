@@ -7,6 +7,8 @@ type Transaction = {
   result_id: string | null;
   lead: { lead_id: string; name: string; company: string; company_email: string; whatsapp_e164: string; created_at: string };
   route: "ARCA" | "STOR" | "AIX" | "WORX" | null;
+  routes?: string[];
+  product_count?: number;
   completeness: number;
   confidence: "high" | "medium" | "low" | null;
   delivery_status: string | null;
@@ -87,7 +89,7 @@ export default function DashboardPage() {
     <aside className="admin-sidebar">
       <a className="admin-logo" href="/"><span>R</span><div><b>RAINER</b><small>AI ASSISTANT</small></div></a>
       <nav><a className="active" href="/dashboard"><i>◫</i> Overview</a><a href="#transactions"><i>↗</i> Transaksi</a><a href="#pipeline"><i>◇</i> Pipeline Review</a></nav>
-      <div className="admin-sidebar-note"><small>KNOWLEDGE BASE</small><b>Rainer KB v1.3.0</b><span><i /> Aktif</span></div>
+      <div className="admin-sidebar-note"><small>KNOWLEDGE BASE</small><b>Rainer KB v2.0.0</b><span><i /> Aktif</span></div>
       <a className="admin-back" href="/">← Kembali ke configurator</a>
     </aside>
 
@@ -107,7 +109,7 @@ export default function DashboardPage() {
       <section className="admin-panel" id="transactions">
         <div className="admin-panel-head"><div><span>LIVE TRANSACTIONS</span><h2>Aktivitas configurator</h2></div><div className="admin-filters"><input aria-label="Cari transaksi" placeholder="Cari nama, perusahaan, email…" value={query} onChange={(e) => setQuery(e.target.value)} /><select aria-label="Filter jalur" value={route} onChange={(e) => setRoute(e.target.value)}><option value="all">Semua jalur</option>{Object.keys(routeNames).map((key) => <option key={key}>{key}</option>)}</select><select aria-label="Filter status" value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">Semua status</option>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div></div>
         <div className="admin-table-wrap"><table><thead><tr><th>Customer</th><th>Jalur</th><th>Kelengkapan</th><th>Confidence</th><th>Delivery</th><th>Status review</th><th /></tr></thead><tbody>
-          {filtered.map((item) => <tr key={item.session_id}><td><b>{item.lead.name}</b><span>{item.lead.company}</span><small>{item.lead.company_email}</small></td><td>{item.route ? <span className={`route-badge route-${item.route.toLowerCase()}`}>{item.route}<small>{routeNames[item.route]}</small></span> : <span className="muted">Belum dipilih</span>}</td><td><div className="completion"><b>{item.completeness}%</b><i><span style={{ width: `${item.completeness}%` }} /></i></div></td><td><span className={`confidence confidence-${item.confidence || "none"}`}><i />{item.confidence === "high" ? "Tinggi" : item.confidence === "medium" ? "Sedang" : item.confidence === "low" ? "Rendah" : "Belum ada"}</span></td><td><span className="delivery">{item.delivery_status === "accepted" ? "✓ Email accepted" : item.delivery_status || "Belum dikirim"}</span></td><td><select value={item.review_status} onChange={(e) => changeStatus(item, e.target.value)} aria-label={`Status ${item.lead.name}`}>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></td><td><button className="row-action" onClick={() => openDetail(item)}>Lihat →</button></td></tr>)}
+          {filtered.map((item) => <tr key={item.session_id}><td><b>{item.lead.name}</b><span>{item.lead.company}</span><small>{item.lead.company_email}</small></td><td>{item.route ? <span className={`route-badge route-${item.route.toLowerCase()}`}>{item.routes?.join(" + ") || item.route}<small>{item.product_count || 1} produk</small></span> : <span className="muted">Belum dipilih</span>}</td><td><div className="completion"><b>{item.completeness}%</b><i><span style={{ width: `${item.completeness}%` }} /></i></div></td><td><span className={`confidence confidence-${item.confidence || "none"}`}><i />{item.confidence === "high" ? "Tinggi" : item.confidence === "medium" ? "Sedang" : item.confidence === "low" ? "Rendah" : "Belum ada"}</span></td><td><span className="delivery">{item.delivery_status === "accepted" ? "✓ Email accepted" : item.delivery_status || "Belum dikirim"}</span></td><td><select value={item.review_status} onChange={(e) => changeStatus(item, e.target.value)} aria-label={`Status ${item.lead.name}`}>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></td><td><button className="row-action" onClick={() => openDetail(item)}>Lihat →</button></td></tr>)}
           {!filtered.length && <tr><td colSpan={7}><div className="admin-empty"><span>◎</span><b>{items.length ? "Tidak ada transaksi yang cocok" : "Belum ada data transaksi"}</b><p>{items.length ? "Ubah filter atau kata pencarian." : "Hubungkan dashboard atau selesaikan transaksi dari configurator."}</p></div></td></tr>}
         </tbody></table></div>
       </section>

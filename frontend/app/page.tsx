@@ -77,7 +77,8 @@ const expertQuestions: Record<string, DetailQuestion[]> = {
 export default function Home() {
   const [step, setStep] = useState<Step>("landing");
   const [level, setLevel] = useState<Level>("Bisnis");
-  const [goal, setGoal] = useState("compute");
+  const [goalIds, setGoalIds] = useState<string[]>(["compute"]);
+  const [productQuantities, setProductQuantities] = useState<Record<string, number>>({ ARCA: 1, STOR: 1, AIX: 1, WORX: 1 });
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
@@ -93,7 +94,10 @@ export default function Home() {
 
   const currentIndex = step === "landing" ? -1 : steps.indexOf(step);
   const progress = currentIndex < 0 ? 0 : Math.min(100, ((currentIndex + 1) / 6) * 100);
-  const selectedGoal = useMemo(() => goals.find((item) => item.id === goal) ?? goals[0], [goal]);
+  const selectedGoals = useMemo(() => goals.filter((item) => goalIds.includes(item.id)), [goalIds]);
+  const selectedGoal = selectedGoals[0] ?? goals[0];
+  const selectedRoutes = [...new Set(selectedGoals.map((item) => item.route))];
+  const solutionLabel = selectedRoutes.map((route) => `${productQuantities[route] || 1}× ${route}`).join(" + ");
 
   function next(nextStep: Step) {
     setStep(nextStep);
@@ -109,7 +113,7 @@ export default function Home() {
     next("processing");
     setGenerateError("");
     try {
-      const response = await fetch("/api/results", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, company, email, whatsapp: `+62${whatsapp.replace(/\D/g, "")}`, technicalLevel: level, goalId: selectedGoal.id, route: selectedGoal.route, users, workload, priority, technicalAnswers }) });
+      const response = await fetch("/api/results", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, company, email, whatsapp: `+62${whatsapp.replace(/\D/g, "")}`, technicalLevel: level, goalId: selectedGoal.id, goalIds, route: selectedGoal.route, routes: selectedRoutes, productQuantities, users, workload, priority, technicalAnswers }) });
       const data = await response.json() as { result?: { url: string }; error?: string };
       if (!response.ok || !data.result) throw new Error(data.error || "Gagal membuat rekomendasi");
       window.location.assign(data.result.url);
@@ -160,21 +164,22 @@ export default function Home() {
       )}
 
       {step === "goal" && (
-        <WizardFrame kicker="Langkah 3" title="Apa yang ingin Anda capai?" subtitle="Pilih kebutuhan yang paling mendekati. Anda tidak perlu mengetahui nama produk atau spesifikasi teknisnya.">
+        <WizardFrame kicker="Langkah 3" title="Apa yang ingin Anda capai?" subtitle="Pilih satu atau beberapa kebutuhan. AI akan menyusun produk Rainer dan interconnection yang cukup untuk workload Anda.">
+          <div className="solution-scope"><div><span>SOLUTION SCOPE</span><strong>{solutionLabel}</strong><small>Pilih beberapa kebutuhan, lalu atur jumlah unit setiap keluarga produk.</small></div><div className="solution-route-list">{selectedRoutes.map((route) => <div className="quantity-control" key={route}><b>{route}</b><button type="button" aria-label={`Kurangi ${route}`} onClick={() => setProductQuantities((current) => ({ ...current, [route]: Math.max(1, (current[route] || 1) - 1) }))}>−</button><strong>{productQuantities[route] || 1}</strong><button type="button" aria-label={`Tambah ${route}`} onClick={() => setProductQuantities((current) => ({ ...current, [route]: Math.min(16, (current[route] || 1) + 1) }))}>+</button></div>)}</div></div>
           <div className="goal-grid">
-            {goals.map((item) => <button key={item.id} className={`choice-card goal-card ${goal === item.id ? "selected" : ""}`} onClick={() => { setGoal(item.id); setTechnicalAnswers({}); }}><span className="goal-icon">{item.icon}</span><span><h3>{item.title}</h3><p>{item.text}</p></span><span className="radio" /></button>)}
+            {goals.map((item) => <button key={item.id} className={`choice-card goal-card ${goalIds.includes(item.id) ? "selected" : ""}`} onClick={() => { setGoalIds((current) => current.includes(item.id) ? (current.length > 1 ? current.filter((id) => id !== item.id) : current) : [...current.filter((id) => id !== "unsure"), item.id]); setTechnicalAnswers({}); }}><span className="goal-icon">{item.icon}</span><span><h3>{item.title}</h3><p>{item.text}</p></span><span className="radio" /></button>)}
           </div>
           <WizardActions onBack={back} onNext={() => next("discovery")} />
         </WizardFrame>
       )}
 
       {step === "discovery" && (
-        <WizardFrame kicker={`Langkah 4 · Jalur ${selectedGoal.route}`} title="Ceritakan kebutuhan operasional Anda" subtitle={level === "Expert" ? "Masukkan baseline teknis yang tersedia. Nilai yang belum diketahui dapat ditandai untuk divalidasi bersama." : "Jawab berdasarkan kondisi bisnis sehari-hari. Tidak apa-apa jika Anda belum mengetahui detail teknisnya."}>
+        <WizardFrame kicker={`Langkah 4 · Solusi ${solutionLabel}`} title="Ceritakan kebutuhan operasional Anda" subtitle={level === "Expert" ? "Masukkan baseline teknis yang tersedia. AI juga akan menghitung topology, bandwidth, redundancy, dan interconnection antarproduk." : "Jawab berdasarkan kondisi bisnis sehari-hari. AI akan merancang hubungan antarproduk dan menandai detail yang perlu divalidasi."}>
           <div className="question-stack">
             <ChoiceQuestion number="01" title="Berapa banyak pengguna yang akan dilayani?" value={users} onChange={setUsers} options={["1–25 pengguna", "26–50 pengguna", "51–100 pengguna", "> 100 pengguna", "Belum tahu"]} />
             <ChoiceQuestion number="02" title="Beban kerja utama yang akan dijalankan?" value={workload} onChange={setWorkload} options={["ERP & database", "Virtual machine", "File & aplikasi internal", "Analitik data", "Lainnya"]} />
             <ChoiceQuestion number="03" title="Apa prioritas terpenting bagi bisnis Anda?" value={priority} onChange={setPriority} options={["Stabilitas & kemudahan pengelolaan", "Performa tertinggi", "Ruang pertumbuhan", "Efisiensi biaya"]} />
-            {level !== "Bisnis" && <SkillQuestions level={level} route={selectedGoal.route} answers={technicalAnswers} onChange={(key, value) => setTechnicalAnswers((current) => ({ ...current, [key]: value }))} />}
+            <ScopeQuestions level={level} routes={selectedRoutes} answers={technicalAnswers} onChange={(key, value) => setTechnicalAnswers((current) => ({ ...current, [key]: value }))} />
           </div>
           <WizardActions onBack={back} onNext={() => next("review")} />
         </WizardFrame>
@@ -185,13 +190,13 @@ export default function Home() {
           <div className="review-layout">
             <div className="review-list">
               <ReviewCard title="Profil Anda" onEdit={() => next("identity")} rows={[["Nama", name], ["Perusahaan", company], ["Mode pengalaman", level]]} />
-              <ReviewCard title="Kebutuhan utama" onEdit={() => next("goal")} rows={[["Tujuan", selectedGoal.title], ["Jalur produk", selectedGoal.route], ["Jumlah pengguna", users], ["Workload", workload], ["Prioritas", priority]]} />
-              {level !== "Bisnis" && <ReviewCard title={`Baseline ${level}`} onEdit={() => next("discovery")} rows={Object.entries(technicalAnswers).map(([key, value]) => [questionLabel(selectedGoal.route, key), value])} />}
+              <ReviewCard title="Kebutuhan utama" onEdit={() => next("goal")} rows={[["Tujuan", selectedGoals.map((item) => item.title).join("; ")], ["Produk solusi", solutionLabel], ["Jumlah pengguna", users], ["Workload", workload], ["Prioritas", priority]]} />
+              <ReviewCard title={`Kebutuhan per produk · ${level}`} onEdit={() => next("discovery")} rows={Object.entries(technicalAnswers).map(([key, value]) => [questionLabel(selectedRoutes, key), value])} />
             </div>
             <aside className="readiness"><span className="score">88<small>%</small></span><h3>Data Anda siap diproses</h3><p>Informasi inti sudah lengkap. Beberapa detail teknis akan dikonfirmasi oleh tim Rainer.</p><div className="mini-bar"><span /></div><ul><li>Profil & kebutuhan lengkap</li><li>2 item perlu validasi</li></ul></aside>
           </div>
           <div className="warning-note"><span>!</span><p>Hasil merupakan rekomendasi awal, bukan quotation atau jaminan kompatibilitas final. Tim Rainer akan melakukan validasi teknis dan komersial.</p></div>
-          {generateError && <div className="error-note" role="alert">{generateError}</div>}
+          {generateError && <div className="error-note" role="alert"><b>Rekomendasi belum dapat dibuat.</b><span>{generateError}</span>{/AI|endpoint|fetch/i.test(generateError) && <small>Pastikan service AI aktif dan dapat diakses oleh backend, lalu coba kembali. Jawaban Anda tetap berada pada halaman review.</small>}</div>}
           <WizardActions onBack={back} onNext={generate} nextLabel="Buat rekomendasi" />
         </WizardFrame>
       )}
@@ -207,7 +212,7 @@ export default function Home() {
 function Landing({ onStart }: { onStart: () => void }) {
   return <section className="landing">
     <div className="ambient ambient-one" /><div className="ambient ambient-two" />
-    <div className="hero-copy"><span className="eyebrow"><i /> Rainer AI Assistant</span><h1>Infrastruktur yang tepat,<br /><em>dimulai dari kebutuhan Anda.</em></h1><p>Ceritakan tantangan bisnis Anda. Kami bantu menerjemahkannya menjadi rekomendasi server dan infrastruktur Rainer yang mudah dipahami.</p><div className="hero-actions"><button className="primary big" onClick={onStart}>Mulai konfigurasi <span>→</span></button><span><b>± 8 menit</b> · Tanpa istilah rumit</span></div><div className="trust-row"><span>✓ Gratis & tanpa komitmen</span><span>✓ Rekomendasi dapat dibagikan</span><span>✓ Ditinjau tim Rainer</span></div></div>
+    <div className="hero-copy"><div className="landing-version-row"><span className="eyebrow"><i /> Rainer AI Assistant</span><span className="version-badge">VERSION 2.0.0 · MULTI-PRODUCT SOLUTION</span></div><h1>Infrastruktur yang tepat,<br /><em>dimulai dari kebutuhan Anda.</em></h1><p>Ceritakan tantangan bisnis Anda. Kami bantu menerjemahkannya menjadi rekomendasi server dan infrastruktur Rainer yang mudah dipahami.</p><div className="hero-actions"><button className="primary big" onClick={onStart}>Mulai konfigurasi <span>→</span></button><span><b>± 8 menit</b> · Tanpa istilah rumit</span></div><div className="trust-row"><span>✓ Gratis & tanpa komitmen</span><span>✓ Rekomendasi dapat dibagikan</span><span>✓ Ditinjau tim Rainer</span></div></div>
     <div className="hero-visual"><div className="orb"><div className="orb-core">R</div><i className="orbit one" /><i className="orbit two" /><i className="dot d1" /><i className="dot d2" /></div><div className="float-card card-a"><small>KEBUTUHAN ANDA</small><strong>ERP & Database</strong><span>80 pengguna · Growth 30%</span></div><div className="float-card card-b"><span className="spark">✦</span><div><small>REKOMENDASI CERDAS</small><strong>Disesuaikan otomatis</strong></div></div></div>
     <div className="how"><span>01 <b>Ceritakan kebutuhan</b></span><i /><span>02 <b>Dapatkan rekomendasi</b></span><i /><span>03 <b>Konsultasikan bersama kami</b></span></div>
   </section>;
@@ -235,13 +240,28 @@ function routeQuestions(route: string, level: Level) {
   return level === "Expert" ? [...middle, ...(expertQuestions[normalizedRoute] || [])] : middle;
 }
 
-function questionLabel(route: string, key: string) {
-  return [...(intermediateQuestions[route] || []), ...(expertQuestions[route] || [])].find((item) => item.key === key)?.title || key;
+function questionLabel(routes: string[], key: string) {
+  for (const route of routes) {
+    const question = [...(intermediateQuestions[route] || []), ...(expertQuestions[route] || [])].find((item) => item.key === key);
+    if (question) return `${route} · ${question.title}`;
+  }
+  return key;
 }
 
-function SkillQuestions({ level, route, answers, onChange }: { level: Level; route: string; answers: Record<string, string>; onChange: (key: string, value: string) => void }) {
-  const questions = routeQuestions(route, level);
-  return <div className="technical-panel"><div><span>{level === "Expert" ? "MODE EXPERT" : "MODE MENENGAH"}</span><h3>{level === "Expert" ? "Baseline sizing & constraint teknis" : "Baseline teknis utama"}</h3><p>{level === "Expert" ? "Parameter ini membantu backend membuat sizing yang lebih presisi. Pilih Belum tahu jika data belum tersedia." : "Pertanyaan tambahan disesuaikan dengan jalur produk yang Anda pilih."}</p></div><div className="question-stack">{questions.map((question, index) => <ChoiceQuestion key={question.key} number={String(index + 4).padStart(2, "0")} title={question.title} value={answers[question.key] || ""} onChange={(value) => onChange(question.key, value)} options={question.options} />)}</div></div>;
+const routeDescriptions: Record<string, string> = {
+  ARCA: "Compute, aplikasi bisnis, database, dan virtualisasi",
+  STOR: "Kapasitas, performa storage, proteksi, dan retensi data",
+  AIX: "Model AI, GPU, dataset, concurrency, daya, dan pendinginan",
+  WORX: "Aplikasi profesional, GPU workstation, display, dan dataset kerja",
+};
+
+function ScopeQuestions({ level, routes, answers, onChange }: { level: Level; routes: string[]; answers: Record<string, string>; onChange: (key: string, value: string) => void }) {
+  let number = 4;
+  return <div className="scope-question-groups">{routes.map((route) => {
+    const allQuestions = routeQuestions(route, level);
+    const questions = level === "Bisnis" ? allQuestions.slice(0, 2) : allQuestions;
+    return <section className="technical-panel" key={route}><div><span>{route} · {level === "Expert" ? "MODE EXPERT" : level === "Menengah" ? "MODE MENENGAH" : "MODE BISNIS"}</span><h3>Kebutuhan operasional {route}</h3><p>{routeDescriptions[route]}. Pertanyaan ini hanya digunakan untuk sizing produk {route}.</p></div><div className="question-stack">{questions.map((question) => { const currentNumber = String(number++).padStart(2, "0"); return <ChoiceQuestion key={`${route}-${question.key}`} number={currentNumber} title={question.title} value={answers[question.key] || ""} onChange={(value) => onChange(question.key, value)} options={question.options} />; })}</div></section>;
+  })}</div>;
 }
 
 function ReviewCard({ title, rows, onEdit }: { title: string; rows: string[][]; onEdit: () => void }) {

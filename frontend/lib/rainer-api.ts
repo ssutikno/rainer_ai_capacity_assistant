@@ -19,6 +19,8 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export type CreateRecommendationInput = {
   name: string; company: string; email: string; whatsapp: string;
   technicalLevel: string; goalId: string; users: string; workload: string; priority: string;
+  goalIds?: string[]; routes?: string[];
+  productQuantities?: Record<string, number>;
   technicalAnswers?: Record<string, string>;
 };
 
@@ -48,8 +50,8 @@ export async function createRecommendation(input: CreateRecommendationInput) {
     workstation: ["application_isv", "scene_dataset", "gpu_vram", "display", "noise", "form_factor", "os", "storage"],
     unsure: ["vm_count_or_size", "hypervisor", "cpu_need", "ram_peak", "ha_reserve", "network", "rack"],
   };
-  for (const field of routeFields[input.goalId] || routeFields.compute) if (!(field in answers)) answers[field] = "unknown";
-  await api(`/v1/sessions/${sessionId}/answers`, { method: "PATCH", headers: auth, body: JSON.stringify({ goal: input.goalId, answers }) });
+  for (const goal of input.goalIds?.length ? input.goalIds : [input.goalId]) for (const field of routeFields[goal] || routeFields.compute) if (!(field in answers)) answers[field] = "unknown";
+  await api(`/v1/sessions/${sessionId}/answers`, { method: "PATCH", headers: auth, body: JSON.stringify({ goal: input.goalId, goals: input.goalIds?.length ? input.goalIds : [input.goalId], product_quantities: input.productQuantities || {}, answers }) });
   await api(`/v1/sessions/${sessionId}/confirm`, { method: "POST", headers: auth, body: "{}" });
   return api<{ result_id: string; result_url: string }>(`/v1/sessions/${sessionId}/recommendations`, {
     method: "POST", headers: { ...auth, "idempotency-key": crypto.randomUUID() }, body: "{}",
@@ -58,12 +60,15 @@ export async function createRecommendation(input: CreateRecommendationInput) {
 
 export type BackendResult = {
   result: {
-    result_id: string; category: string; config_name: string; confidence: "low" | "medium" | "high"; analysis_summary: string;
+    result_id: string; category: string; config_name: string; solution_name?: string; routes?: string[]; confidence: "low" | "medium" | "high"; analysis_summary: string;
     lead: { name: string; company: string }; components: Record<string, string>;
     sizing: { current_demand: string; recommended_capacity: string; headroom_percent: number; projected_capacity: string; projection_horizon_years: number };
     validation_required: Array<{ field: string; reason: string }>; assumptions: string[]; risks: string[];
     workload_profile?: { id: string; name: string; source: string; formula: string };
     alternatives?: Array<{ tier: "good" | "better" | "best"; recommended: boolean; difference: string; suggested_specification: Record<string, string> }>;
+    products?: Array<{ solution_product_id: string; family: string; role: string; quantity: number; config_name: string; components: Record<string, string>; sizing: { current_demand: string; recommended_capacity: string; headroom_percent: number; projected_capacity: string; projection_horizon_years: number }; confidence: "low" | "medium" | "high" }>;
+    interconnections?: Array<{ source_product_id: string; destination_product_id: string; purpose: string; traffic_class: string; protocol: string; estimated_bandwidth: string; recommended_link: string; quantity: number; redundancy: string; validation_required: string[] }>;
+    network_architecture?: { topology: string; segments: string[]; switching_requirements: string; resilience_strategy: string; capacity_rationale: string; expansion_triggers: string[] };
   };
   share: { expires_at: string };
 };

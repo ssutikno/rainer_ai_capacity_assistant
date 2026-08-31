@@ -1,4 +1,4 @@
-# STOR Storage Workload Baseline v1.3.0
+# STOR Storage Workload Baseline v2.0.0
 
 | Workload | Kapasitas awal | Tambahan per user | Proyeksi 3 tahun | Proteksi awal |
 |---|---:|---:|---:|---|

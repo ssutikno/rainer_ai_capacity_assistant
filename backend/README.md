@@ -1,8 +1,8 @@
-# Rainer AI Capacity Assistant Backend v1.3.0
+# Rainer AI Capacity Assistant Backend v2.0.0
 
-Backend Node.js untuk Rainer AI Capacity Assistant v1.3.0. AI wajib menganalisis input untuk mengusulkan spesifikasi, sizing, headroom, proyeksi kapasitas, serta strategi scale-up/scale-out. Routing dan guardrail tetap deterministik, provenance model disimpan, dan klaim komersial atau kompatibilitas tanpa sumber diblokir.
+Backend Node.js untuk Rainer AI Capacity Assistant v2.0.0. AI mengusulkan satu atau beberapa produk beserta sizing, topology, bandwidth, port/link quantity, redundancy, dan strategi scale-up/scale-out. Routing dan guardrail tetap deterministik, provenance disimpan, dan klaim komersial atau kompatibilitas tanpa sumber diblokir.
 
-Workload baseline v1.3.0 memastikan input customer yang masih dasar tetap menghasilkan suggested specification Good/Better/Best. Baseline deterministik tersedia untuk ARCA compute, STOR storage, AIX AI, dan WORX workstation; nilai customer yang terukur selalu mengalahkan baseline.
+Workload baseline v2.0.0 memastikan input customer yang masih dasar tetap menghasilkan suggested specification Good/Better/Best. Baseline deterministik tersedia untuk ARCA compute, STOR storage, AIX AI, dan WORX workstation; nilai customer yang terukur selalu mengalahkan baseline.
 
 ## Menjalankan lokal
 

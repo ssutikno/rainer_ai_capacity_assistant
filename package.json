@@ -1,9 +1,11 @@
 {
   "name": "rainer_ai_capacity_assistant",
-  "version": "1.3.0",
+  "version": "2.0.0",
   "private": true,
   "workspaces": ["backend", "frontend"],
   "scripts": {
+    "dev": "node scripts/start-dev.js",
+    "start:all": "node scripts/start-dev.js",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
     "test": "npm --prefix backend test && npm --prefix frontend test",

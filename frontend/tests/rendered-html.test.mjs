@@ -18,6 +18,8 @@ test("renders the Rainer customer configurator", async () => {
   assert.match(html, /Rainer AI Assistant/i);
   assert.match(html, /Infrastruktur yang tepat/i);
   assert.match(html, /Mulai konfigurasi/i);
+  assert.match(html, /VERSION 2\.0\.0/i);
+  assert.match(html, /MULTI-PRODUCT SOLUTION/i);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
 });
 
@@ -35,13 +37,29 @@ test("connects result creation and display to the backend API", async () => {
   assert.match(backendClient, /\/v1\/leads/);
   assert.match(backendClient, /\/recommendations/);
   assert.match(backendClient, /technicalAnswers/);
+  assert.match(backendClient, /goalIds/);
+  assert.match(resultPage, /ARSITEKTUR NETWORK AI/);
+  assert.match(resultPage, /INTERCONNECTION/);
+  const diagram = await readFile(new URL("app/result/[id]/SolutionDiagram.tsx", root), "utf8");
+  assert.match(diagram, /type: "excalidraw"/);
+  assert.match(diagram, /mcp_excalidraw/);
+  assert.match(diagram, /create_from_mermaid/);
+  assert.match(diagram, /flowchart LR/);
+  assert.match(diagram, /estimated_bandwidth/);
 });
 
 test("provides distinct business, intermediate, and expert discovery questions", async () => {
   const page = await readFile(new URL("app/page.tsx", root), "utf8");
   assert.match(page, /intermediateQuestions/);
   assert.match(page, /expertQuestions/);
-  assert.match(page, /level !== "Bisnis"/);
+  assert.match(page, /MODE BISNIS/);
   assert.match(page, /MODE MENENGAH/);
   assert.match(page, /MODE EXPERT/);
+  assert.match(page, /SOLUTION SCOPE/);
+  assert.match(page, /atur jumlah unit setiap keluarga produk/);
+  assert.match(page, /productQuantities/);
+  assert.match(page, /Tambah \$\{route\}/);
+  assert.match(page, /ScopeQuestions/);
+  assert.match(page, /Kebutuhan operasional \{route\}/);
+  assert.match(page, /Pertanyaan ini hanya digunakan untuk sizing produk/);
 });

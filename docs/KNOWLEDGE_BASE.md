@@ -1,8 +1,8 @@
-# Rainer Product Knowledge Base v1.3.0
+# Rainer Product Knowledge Base v2.0.0
 
 > **Tujuan:** referensi produk untuk Rainer AI Assistant dalam melakukan discovery kebutuhan, memilih keluarga produk, menyusun konfigurasi awal, dan menghasilkan proposal penawaran.
 >
-> **Versi data:** 1.3.0 — 25 Agustus 2026  
+> **Versi data:** 2.0.0 — 26 Agustus 2026
 > **Status:** working knowledge base; bukan price list atau datasheet final.
 
 ## Aturan penggunaan data
@@ -422,7 +422,34 @@ Proposal yang dibuat AI sebaiknya memiliki bagian berikut:
 
 ```yaml
 recommendation:
-  category: ARCA | STOR | AIX | WORX
+  version: 3
+  solution_type: single_product | multi_product
+  routes: [ARCA, STOR, AIX, WORX]
+  products:
+    - solution_product_id: product-1
+      family: ARCA | STOR | AIX | WORX
+      role: string
+      quantity: number
+      sizing: object
+      components: object
+  interconnections:
+    - source_product_id: product-1
+      destination_product_id: product-2
+      purpose: string
+      traffic_class: management | production | storage | backup | ai_fabric
+      protocol: string
+      estimated_bandwidth: string
+      recommended_link: string
+      quantity: number
+      redundancy: string
+      validation_required: [string]
+  network_architecture:
+    topology: string
+    segments: [string]
+    switching_requirements: string
+    resilience_strategy: string
+    capacity_rationale: string
+    expansion_triggers: [string]
   product_id: ""
   configuration_name: ""
   quantity: 1

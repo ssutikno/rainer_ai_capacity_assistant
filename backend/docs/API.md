@@ -1,4 +1,6 @@
-# Kontrak API Ringkas v1.3.0
+# Kontrak API Ringkas v2.0.0
+
+Payload answers dapat memakai `goals` untuk memilih beberapa workload. Recommendation version 3 memuat `products[]`, `interconnections[]`, dan `network_architecture`. Field tunggal versi sebelumnya tetap diproyeksikan dari produk utama untuk kompatibilitas.
 
 Semua body dan respons menggunakan JSON, kecuali endpoint QR yang mengembalikan SVG. Error memiliki bentuk `{ "error": "CODE", "message": "...", "details": [] }`.
 

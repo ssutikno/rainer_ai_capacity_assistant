@@ -1,4 +1,4 @@
-# AIX AI Workload Baseline v1.3.0
+# AIX AI Workload Baseline v2.0.0
 
 | Workload | GPU awal | System memory | Dataset storage | Network |
 |---|---|---:|---:|---|

@@ -3,6 +3,8 @@ import { createRecommendation, RainerApiError } from "../../../lib/rainer-api";
 type CreateResultPayload = {
   name?: string; company?: string; email?: string; whatsapp?: string;
   technicalLevel?: string; goalId?: string; route?: string;
+  goalIds?: string[]; routes?: string[];
+  productQuantities?: Record<string, number>;
   users?: string; workload?: string; priority?: string;
   technicalAnswers?: Record<string, string>;
 };

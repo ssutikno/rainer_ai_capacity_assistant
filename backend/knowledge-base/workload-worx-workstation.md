@@ -1,4 +1,4 @@
-# WORX Workstation Workload Baseline v1.3.0
+# WORX Workstation Workload Baseline v2.0.0
 
 | Workload | CPU | Memory | GPU | Local storage |
 |---|---:|---:|---:|---:|

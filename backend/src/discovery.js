@@ -14,6 +14,12 @@ export const routeRequirement = (goal, answers = {}) => {
   if (goal === "ai" || /gpu|training|inference|machine learning|ai/i.test(answers.workload || "")) return { route: "AIX", rule_id: "route-ai" };
   return { route: "ARCA", rule_id: goal === "unsure" ? "route-unsure-default" : "route-compute" };
 };
+export const routeRequirements = (goals, answers = {}) => {
+  const requested = Array.isArray(goals) && goals.length ? goals : [goals || "unsure"];
+  const explicit = { compute: "ARCA", storage: "STOR", ai: "AIX", workstation: "WORX" };
+  const routes = [...new Set(requested.map((goal) => explicit[goal] || routeRequirement(goal, answers).route))];
+  return { routes, route: routes[0], rule_id: routes.length > 1 ? "route-multi-product" : routeRequirement(requested[0], answers).rule_id };
+};
 export const discoverySchema = (route, level = "business") => ({
   route, level,
   required: [...common, ...(routeFields[route] || [])],
@@ -26,4 +32,13 @@ export function completeness(route, answers = {}) {
   const unknown = answered.filter((field) => ["unknown", "tidak_tahu"].includes(String(answers[field]).toLowerCase()));
   const known = answered.filter((field) => !unknown.includes(field));
   return { score: Math.round((answered.length / fields.length) * 100), answered_score: Math.round((answered.length / fields.length) * 100), known_data_score: Math.round((known.length / fields.length) * 100), missing: fields.filter((field) => !answered.includes(field)), unknown, minimum_met: common.every((field) => answered.includes(field)) };
+}
+
+export function solutionCompleteness(routes, answers = {}) {
+  const selected = Array.isArray(routes) && routes.length ? routes : [routes || "ARCA"];
+  const fields = [...new Set([...common, ...selected.flatMap((route) => routeFields[route] || [])])];
+  const answered = fields.filter((field) => answers[field] !== undefined && answers[field] !== "" && answers[field] !== null);
+  const unknown = answered.filter((field) => ["unknown", "tidak_tahu"].includes(String(answers[field]).toLowerCase()));
+  const known = answered.filter((field) => !unknown.includes(field));
+  return { score: Math.round(answered.length / fields.length * 100), answered_score: Math.round(answered.length / fields.length * 100), known_data_score: Math.round(known.length / fields.length * 100), missing: fields.filter((field) => !answered.includes(field)), unknown, minimum_met: common.every((field) => answered.includes(field)) };
 }

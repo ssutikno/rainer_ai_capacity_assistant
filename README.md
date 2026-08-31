@@ -1,14 +1,14 @@
 # Rainer AI Capacity Assistant
 
-Versi **1.3.0**
+Versi **2.0.0**
 
-Rainer AI Capacity Assistant adalah configurator infrastruktur berbasis AI yang menerjemahkan kebutuhan customer menjadi rekomendasi kapasitas awal untuk keluarga produk Rainer ARCA, STOR, AIX, dan WORX. Rekomendasi mencakup sizing, headroom, proyeksi pertumbuhan, strategi scale-up/scale-out, serta pilihan Good/Better/Best.
+Rainer AI Capacity Assistant adalah solution designer berbasis AI yang menerjemahkan kebutuhan customer menjadi arsitektur satu atau beberapa produk Rainer ARCA, STOR, AIX, dan WORX. Versi 2.0.0 menghasilkan sizing per produk, headroom, proyeksi pertumbuhan, strategi scale-up/scale-out, serta topology dan interconnection yang cukup untuk workload.
 
 ## Struktur repository
 
 - `frontend/` — configurator customer, halaman hasil, dan dashboard internal.
 - `backend/` — API, routing discovery, integrasi AI, guardrail, audit, dan penyimpanan development.
-- `backend/knowledge-base/` — baseline workload aktif versi 1.3.0.
+- `backend/knowledge-base/` — baseline workload dan aturan solution composition aktif versi 2.0.0.
 - `docs/` — dokumentasi produk, arsitektur, API, dan panduan deployment.
 
 ## Prasyarat
@@ -18,6 +18,16 @@ Rainer AI Capacity Assistant adalah configurator infrastruktur berbasis AI yang 
 
 ## Menjalankan secara lokal
 
+Untuk menjalankan frontend dan backend sekaligus dari root project:
+
+```bash
+npm run dev
+```
+
+Perintah ini membuka frontend di `http://localhost:3000` dan backend di `http://localhost:4000`. Tekan `Ctrl+C` untuk menghentikan keduanya.
+
+Untuk menjalankan masing-masing service secara terpisah:
+
 ```bash
 git clone https://github.com/<owner>/rainer_ai_capacity_assistant.git
 cd rainer_ai_capacity_assistant/backend
@@ -25,6 +35,8 @@ npm install
 cp .env.example .env
 npm run dev
 ```
+
+Perintah `npm run dev` menjalankan backend melalui supervisor. Jika koneksi AI gagal tiga kali berturut-turut, backend keluar secara terkontrol dan supervisor menjalankannya kembali dengan exponential backoff. Batasnya lima restart dalam lima menit untuk mencegah restart loop. Gunakan `GET /health/ai` untuk pemeriksaan koneksi nyata backend ke AI Server; `GET /health` hanya memeriksa proses dan konfigurasi.
 
 Pada terminal lain:
 

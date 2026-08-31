@@ -77,12 +77,33 @@ test("validasi lead dan proteksi admin", async (t) => {
 });
 
 test("empat jalur produk memiliki routing deterministik", async () => {
-  const { routeRequirement } = await import("../src/discovery.js");
+  const { routeRequirement, routeRequirements } = await import("../src/discovery.js");
   assert.equal(routeRequirement("compute", {}).route, "ARCA");
   assert.equal(routeRequirement("storage", {}).route, "STOR");
   assert.equal(routeRequirement("ai", {}).route, "AIX");
   assert.equal(routeRequirement("workstation", {}).route, "WORX");
   assert.equal(routeRequirement("unsure", { workload: "backup dan arsip" }).route, "STOR");
+  assert.deepEqual(routeRequirements(["compute", "storage", "ai"], {}).routes, ["ARCA", "STOR", "AIX"]);
+});
+
+test("solusi multi-produk menghasilkan product blocks dan interconnection yang cukup", async (t) => {
+  const ctx = await setup(); t.after(ctx.close);
+  let response = await request(ctx.base, "/v1/leads", { method: "POST", body: { name: "Sari Wijaya", company: "Digital Industri", company_email: "sari@digital.co.id", whatsapp: "081298765432", country_code: "+62", service_consent: true } });
+  const created = await response.json(), auth = { authorization: `Bearer ${created.resume_token}` }, sessionId = created.session.session_id;
+  await request(ctx.base, `/v1/sessions/${sessionId}/profile`, { method: "PATCH", headers: auth, body: { technical_level: "expert" } });
+  const answers = { location: "Jakarta", user_count: 80, workload: "ERP, database, backup, dan AI inference", criticality: "high", current_condition: "existing", bottleneck: "network dan storage", growth_3_5_years: "40%", timeline: "Q4", budget_range: "discussion" };
+  for (const field of ["vm_count_or_size","hypervisor","cpu_need","ram_peak","ha_reserve","network","rack","usable_capacity_tb","growth","retention","snapshot","free_space_target","performance_target","protocol","backup_immutable","model_framework","ai_mode","precision","concurrency","dataset","vram","gpu_count","power_cooling"]) answers[field] ||= "unknown";
+  response = await request(ctx.base, `/v1/sessions/${sessionId}/answers`, { method: "PATCH", headers: auth, body: { goals: ["compute", "storage", "ai"], product_quantities: { ARCA: 3, STOR: 2, AIX: 1 }, answers } });
+  assert.equal(response.status, 200); const saved = await response.json(); assert.deepEqual(saved.routes, ["ARCA", "STOR", "AIX"]); assert.deepEqual(saved.product_quantities, { ARCA: 3, STOR: 2, AIX: 1 });
+  await request(ctx.base, `/v1/sessions/${sessionId}/confirm`, { method: "POST", headers: auth, body: {} });
+  response = await request(ctx.base, `/v1/sessions/${sessionId}/recommendations`, { method: "POST", headers: { ...auth, "idempotency-key": "multi-1" }, body: {} });
+  assert.equal(response.status, 201); const generated = await response.json();
+  assert.equal(generated.products.length, 3); assert.ok(generated.interconnections.length >= 2);
+  assert.deepEqual(generated.products.map((product) => product.quantity), [3, 2, 1]);
+  assert.match(generated.network_architecture.capacity_rationale, /bandwidth|headroom/i);
+  assert.ok(generated.interconnections.every((link) => link.quantity >= 4));
+  response = await request(ctx.base, new URL(generated.result_url).pathname); const result = (await response.json()).result;
+  assert.equal(result.version, 3); assert.equal(result.solution_type, "multi_product"); assert.equal(result.provenance.network_design_source, "deterministic-fallback");
 });
 
 test("semua jalur memiliki suggested specification Good Better Best", () => {
