@@ -2,8 +2,8 @@ import { spawn } from "node:child_process";
 
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const services = [
-  { name: "backend", args: ["--prefix", "backend", "run", "dev"] },
-  { name: "frontend", args: ["--prefix", "frontend", "run", "dev"] },
+  { name: "backend", args: ["--prefix", "backend", "run", "start"] },
+  { name: "frontend", args: ["--prefix", "frontend", "run", "start"] },
 ];
 
 let stopping = false;
@@ -12,7 +12,7 @@ const children = new Map();
 function start(service) {
   const child = spawn(npmCommand, service.args, {
     cwd: process.cwd(),
-    env: process.env,
+    env: { ...process.env, NODE_ENV: "production" },
     stdio: "inherit",
     windowsHide: true,
   });
@@ -44,5 +44,5 @@ function shutdown(exitCode = 0) {
 process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
-console.info("Menjalankan Rainer AI Assistant: frontend http://localhost:4001 dan backend http://localhost:4000");
+console.info("Menjalankan production: frontend http://localhost:4001 dan backend http://localhost:4000");
 for (const service of services) start(service);

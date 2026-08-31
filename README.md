@@ -24,7 +24,7 @@ Untuk menjalankan frontend dan backend sekaligus dari root project:
 npm run dev
 ```
 
-Perintah ini membuka frontend di `http://localhost:3000` dan backend di `http://localhost:4000`. Tekan `Ctrl+C` untuk menghentikan keduanya.
+Perintah ini membuka frontend di `http://localhost:4001` dan backend di `http://localhost:4000`. Tekan `Ctrl+C` untuk menghentikan keduanya.
 
 Untuk menjalankan masing-masing service secara terpisah:
 
@@ -46,7 +46,18 @@ npm install
 npm run dev
 ```
 
-Backend tersedia di `http://localhost:4000` dan frontend di `http://localhost:3000`. Konfigurasikan `AI_MODEL` pada `backend/.env`; `ai_host_url` dan `ai_api_key` dibaca dari system environment variable agar kredensial tidak masuk repository.
+Backend tersedia di `http://localhost:4000` dan frontend di `http://localhost:4001`. Konfigurasikan `AI_MODEL` pada `backend/.env`; `ai_host_url` dan `ai_api_key` dibaca dari system environment variable agar kredensial tidak masuk repository.
+
+## Menjalankan production
+
+Buat build frontend, lalu jalankan backend dan frontend production dari root project:
+
+```bash
+npm run build
+npm start
+```
+
+Frontend production mendengarkan pada `0.0.0.0:4001` dan backend pada port `4000`. Perintah `npm start` menetapkan `NODE_ENV=production` dan menghentikan kedua service bersama-sama saat salah satunya gagal atau proses dihentikan.
 
 ## Verifikasi
 

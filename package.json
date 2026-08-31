@@ -5,7 +5,9 @@
   "workspaces": ["backend", "frontend"],
   "scripts": {
     "dev": "node scripts/start-dev.js",
-    "start:all": "node scripts/start-dev.js",
+    "build": "npm --prefix frontend run build",
+    "start": "node scripts/start-production.js",
+    "start:all": "node scripts/start-production.js",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
     "test": "npm --prefix backend test && npm --prefix frontend test",

@@ -1,4 +1,4 @@
-# Rainer AI Capacity Assistant Frontend v1.3.0
+# Rainer AI Capacity Assistant Frontend v2.0.0
 
 Frontend React/TypeScript untuk configurator customer, halaman hasil rekomendasi, dan dashboard internal Rainer AI Capacity Assistant.
 
@@ -11,12 +11,13 @@ npm install
 npm run dev
 ```
 
-Frontend tersedia di `http://localhost:3000`. Gunakan `BACKEND_API_URL` untuk mengganti alamat backend default `http://localhost:4000`.
+Frontend tersedia di `http://localhost:4001`. Gunakan `BACKEND_API_URL` untuk mengganti alamat backend default `http://localhost:4000`.
 
 ## Perintah
 
-- `npm run dev` — menjalankan development server.
+- `npm run dev` — menjalankan development server pada `0.0.0.0:4001`.
 - `npm run build` — membuat production build.
+- `npm start` — menjalankan production build pada `0.0.0.0:4001`.
 - `npm test` — membangun aplikasi dan menjalankan pengujian HTML/integrasi.
 - `npm run lint` — menjalankan pemeriksaan lint.
 - `npm run db:generate` — membuat migrasi Drizzle setelah schema berubah.
